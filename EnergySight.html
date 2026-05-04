@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EnergySight — Моніторинг Енергетичних Об'єктів</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,600;1,9..40,300&display=swap');
+
+  :root {
+    --bg: #0a0f1a;
+    --surface: #111827;
+    --card: #161f30;
+    --border: #1e2d44;
+    --accent: #00d4aa;
+    --accent2: #ff6b35;
+    --accent3: #7c5cfc;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --online: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ─────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.25rem;
+    color: var(--accent);
+    letter-spacing: -0.03em;
+  }
+  .logo span { color: var(--text); }
+
+  .header-meta {
+    display: flex; align-items: center; gap: 24px;
+  }
+
+  .ws-badge {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.78rem; font-family: 'Space Mono', monospace;
+    color: var(--muted);
+  }
+  .ws-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--online);
+    box-shadow: 0 0 8px var(--online);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  .header-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--accent);
+  }
+
+  /* ── LAYOUT ─────────────────────────────── */
+  main { padding: 24px 32px; max-width: 1600px; margin: 0 auto; }
+
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .page-title {
+    font-size: 1.5rem; font-weight: 600;
+  }
+  .page-title small {
+    font-size: 0.85rem; color: var(--muted); font-weight: 300; margin-left: 8px;
+  }
+
+  .controls {
+    display: flex; gap: 12px; align-items: center;
+  }
+
+  select, button {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  select {
+    background: var(--card);
+    color: var(--text);
+    appearance: none;
+    padding-right: 28px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='%2364748b'%3E%3Cpath d='M0 0l6 8 6-8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+  }
+  select:focus { outline: none; border-color: var(--accent); }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0a0f1a;
+    font-weight: 600;
+    border-color: transparent;
+  }
+  .btn-primary:hover { filter: brightness(1.1); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── KPI CARDS ───────────────────────────── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .kpi-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .kpi-card:hover { border-color: var(--accent); }
+
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .kpi-card.green::before { background: var(--accent); }
+  .kpi-card.orange::before { background: var(--accent2); }
+  .kpi-card.purple::before { background: var(--accent3); }
+  .kpi-card.yellow::before { background: var(--warning); }
+
+  .kpi-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .kpi-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .kpi-card.green .kpi-value { color: var(--accent); }
+  .kpi-card.orange .kpi-value { color: var(--accent2); }
+  .kpi-card.purple .kpi-value { color: var(--accent3); }
+  .kpi-card.yellow .kpi-value { color: var(--warning); }
+
+  .kpi-change {
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .kpi-change.up { color: var(--online); }
+  .kpi-change.down { color: var(--danger); }
+
+  /* ── CHARTS GRID ─────────────────────────── */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .chart-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .chart-subtitle {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .chart-legend {
+    display: flex; gap: 16px;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.75rem; color: var(--muted);
+  }
+  .legend-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+
+  .chart-body { position: relative; height: 260px; }
+
+  /* ── BOTTOM GRID ─────────────────────────── */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* ── TABLE ───────────────────────────────── */
+  .table-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .table-header-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    padding: 10px 16px;
+    background: var(--surface);
+    font-weight: 400;
+  }
+  tbody tr {
+    border-top: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  tbody td {
+    padding: 11px 16px;
+    font-size: 0.83rem;
+  }
+
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.72rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+  .status-badge.online  { background: rgba(34,197,94,.15);  color: var(--online); }
+  .status-badge.warning { background: rgba(245,158,11,.15); color: var(--warning); }
+  .status-badge.offline { background: rgba(239,68,68,.15);  color: var(--danger); }
+  .status-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+  /* ── EVENTS LOG ──────────────────────────── */
+  .events-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .events-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .events-body {
+    flex: 1; overflow-y: auto;
+    max-height: 320px;
+    padding: 8px 0;
+  }
+  .events-body::-webkit-scrollbar { width: 4px; }
+  .events-body::-webkit-scrollbar-track { background: transparent; }
+  .events-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .event-item {
+    display: flex; gap: 12px;
+    padding: 10px 20px;
+    animation: slideIn 0.3s ease;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  @keyframes slideIn { from { opacity:0; transform: translateX(-8px); } to { opacity:1; transform: none; } }
+
+  .event-icon {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .event-icon.info    { background: rgba(124,92,252,.2); color: var(--accent3); }
+  .event-icon.warn    { background: rgba(245,158,11,.2); color: var(--warning); }
+  .event-icon.danger  { background: rgba(239,68,68,.2);  color: var(--danger);  }
+  .event-icon.success { background: rgba(0,212,170,.2);  color: var(--accent);  }
+
+  .event-content { flex: 1; }
+  .event-title { font-size: 0.82rem; font-weight: 600; margin-bottom: 2px; }
+  .event-meta { font-size: 0.73rem; color: var(--muted); }
+  .event-time { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+
+  /* ── API PANEL ───────────────────────────── */
+  .api-panel {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 12px 32px;
+    display: flex; align-items: center; gap: 20px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .api-method { color: var(--accent2); }
+  .api-url { color: var(--accent); }
+  .api-status { margin-left: auto; color: var(--online); }
+
+  /* ── GAUGE ───────────────────────────────── */
+  .gauge-container { text-align: center; padding: 12px 0; }
+  .gauge-value { font-family: 'Space Mono', monospace; font-size: 1.8rem; color: var(--accent2); }
+  .gauge-label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+
+  @media (max-width: 1024px) {
+    .kpi-grid { grid-template-columns: repeat(2,1fr); }
+    .charts-grid, .bottom-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">Energy<span>Sight</span></div>
+  <div class="header-meta">
+    <div class="ws-badge">
+      <div class="ws-dot" id="wsDot"></div>
+      <span id="wsStatus">WebSocket: підключено</span>
+    </div>
+    <div class="header-time" id="headerTime">--:--:--</div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+  <div class="top-bar">
+    <div>
+      <div class="page-title">Моніторинг енергетичних об'єктів <small>Практична робота №5</small></div>
+    </div>
+    <div class="controls">
+      <select id="objectSelect" onchange="switchObject()">
+        <option value="0">ТЕС «Придніпровська»</option>
+        <option value="1">ГЕС «Дніпровська»</option>
+        <option value="2">СЕС «Херсонська»</option>
+        <option value="3">ВЕС «Очаківська»</option>
+      </select>
+      <button class="btn-ghost" onclick="pauseUpdates()">⏸ Пауза</button>
+      <button class="btn-primary" onclick="exportCSV()">↓ Експорт CSV</button>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid">
+    <div class="kpi-card green">
+      <div class="kpi-label">Поточна потужність</div>
+      <div class="kpi-value" id="kpiPower">—</div>
+      <div class="kpi-change" id="kpiPowerDelta">МВт</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-label">Вироблено сьогодні</div>
+      <div class="kpi-value" id="kpiEnergy">—</div>
+      <div class="kpi-change" id="kpiEnergyDelta">МВт·год</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-label">Завантаженість</div>
+      <div class="kpi-value" id="kpiLoad">—</div>
+      <div class="kpi-change" id="kpiLoadDelta">% від номінального</div>
+    </div>
+    <div class="kpi-card yellow">
+      <div class="kpi-label">Температура обладнання</div>
+      <div class="kpi-value" id="kpiTemp">—</div>
+      <div class="kpi-change" id="kpiTempDelta">°C</div>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Потужність у реальному часі</div>
+          <div class="chart-subtitle">Оновлення кожні 2 секунди (WebSocket)</div>
+        </div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#00d4aa"></div>Активна</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#7c5cfc"></div>Реактивна</div>
+        </div>
+      </div>
+      <div class="chart-body"><canvas id="powerChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Розподіл навантаження</div>
+          <div class="chart-subtitle">За типами споживачів (REST API)</div>
+        </div>
+      </div>
+      <div class="chart-body"><canvas id="donutChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM -->
+  <div class="bottom-grid">
+    <!-- TABLE -->
+    <div class="table-card">
+      <div class="table-header-row">
+        <div>
+          <div class="chart-title">Стан агрегатів</div>
+          <div class="chart-subtitle">Дані оновлено: <span id="tableTime">—</span></div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Агрегат</th>
+            <th>Потужність</th>
+            <th>Завант.</th>
+            <th>Темп.</th>
+            <th>Статус</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- EVENTS -->
+    <div class="events-card">
+      <div class="events-header">
+        <div>
+          <div class="chart-title">Журнал подій</div>
+          <div class="chart-subtitle">WebSocket push-сповіщення</div>
+        </div>
+        <button class="btn-ghost" style="padding:6px 12px;font-size:0.75rem" onclick="clearEvents()">Очистити</button>
+      </div>
+      <div class="events-body" id="eventsBody"></div>
+    </div>
+  </div>
+</main>
+
+<!-- API STATUS BAR -->
+<div class="api-panel">
+  <span class="api-method">GET</span>
+  <span class="api-url" id="apiUrl">https://api.energysight.ua/v1/objects/0/realtime</span>
+  <span>|</span>
+  <span>Затримка: <span id="apiLatency">—</span> мс</span>
+  <span>|</span>
+  <span>Запитів: <span id="apiRequests">0</span></span>
+  <span class="api-status">✓ 200 OK</span>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  КОНФІГУРАЦІЯ ОБ'ЄКТІВ
+// ═══════════════════════════════════════════════════════════
+const OBJECTS = [
+  { name: 'ТЕС «Придніпровська»', nomPower: 900, units: ['Блок №1','Блок №2','Блок №3','Блок №4'], type: 'coal' },
+  { name: 'ГЕС «Дніпровська»',   nomPower: 650, units: ['Агрегат А','Агрегат Б','Агрегат В'],      type: 'hydro'},
+  { name: 'СЕС «Херсонська»',    nomPower: 200, units: ['Поле 1','Поле 2','Поле 3'],               type: 'solar'},
+  { name: 'ВЕС «Очаківська»',    nomPower: 150, units: ['Ротор 1','Ротор 2','Ротор 3','Ротор 4'],  type: 'wind' },
+];
+const CONSUMERS = ['Промисловість','Комунальне','Транспорт','Побутове'];
+const CONSUMER_COLORS = ['#00d4aa','#ff6b35','#7c5cfc','#f59e0b'];
+
+// ═══════════════════════════════════════════════════════════
+//  СТАН
+// ═══════════════════════════════════════════════════════════
+let currentObj = 0;
+let paused = false;
+let requestCount = 0;
+let powerHistory = [];
+let reactiveHistory = [];
+let labels = [];
+const MAX_POINTS = 30;
+
+// ═══════════════════════════════════════════════════════════
+//  ГЕНЕРАТОР ДАНИХ (симулює WebSocket/REST)
+// ═══════════════════════════════════════════════════════════
+function fakeRealtime(obj) {
+  const nom = OBJECTS[obj].nomPower;
+  const base = nom * (0.55 + 0.35 * Math.random());
+  const t = Date.now() / 1000;
+  const wave = Math.sin(t * 0.3) * nom * 0.1;
+  const power    = Math.round((base + wave) * 10) / 10;
+  const reactive = Math.round(power * (0.15 + Math.random() * 0.1) * 10) / 10;
+  const load     = Math.round(power / nom * 100);
+  const energy   = Math.round(power * (7 + Math.random()) * 10) / 10;
+  const temp     = 55 + Math.round(load * 0.35 + Math.random() * 8);
+  return { power, reactive, load, energy, temp };
+}
+
+function fakeUnits(obj) {
+  const nom = OBJECTS[obj].nomPower;
+  return OBJECTS[obj].units.map(name => {
+    const r = Math.random();
+    const pw  = Math.round(nom / OBJECTS[obj].units.length * (0.5 + Math.random() * 0.5));
+    const ld  = Math.round(pw / (nom / OBJECTS[obj].units.length) * 100);
+    const tmp = 50 + Math.round(ld * 0.4 + Math.random() * 10);
+    const st  = r > 0.9 ? 'offline' : r > 0.8 ? 'warning' : 'online';
+    return { name, pw, ld, tmp, st };
+  });
+}
+
+function fakeConsumers() {
+  const total = 100;
+  const parts = [0,0,0].map(() => 5 + Math.random() * 30);
+  const sum = parts.reduce((a,b)=>a+b,0);
+  const norm = parts.map(p => Math.round(p/sum*90));
+  norm.push(100 - norm.reduce((a,b)=>a+b,0));
+  return norm;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CHART: POWER LINE
+// ═══════════════════════════════════════════════════════════
+const powerCtx = document.getElementById('powerChart').getContext('2d');
+const powerChart = new Chart(powerCtx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: 'Активна потужність (МВт)',
+        data: [],
+        borderColor: '#00d4aa',
+        backgroundColor: 'rgba(0,212,170,0.08)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+      },
+      {
+        label: 'Реактивна потужність (МВАр)',
+        data: [],
+        borderColor: '#7c5cfc',
+        backgroundColor: 'rgba(124,92,252,0.06)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 1.5,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        borderDash: [4,3],
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 400 },
+    interaction: { intersect: false, mode: 'index' },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: {
+        ticks: { color: '#64748b', font: { size: 10, family: 'Space Mono' }, maxTicksLimit: 8 },
+        grid: { color: 'rgba(255,255,255,0.04)' }
+      },
+      y: {
+        ticks: { color: '#64748b', font: { size: 10, family: 'Space Mono' } },
+        grid: { color: 'rgba(255,255,255,0.04)' }
+      }
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  CHART: DONUT
+// ═══════════════════════════════════════════════════════════
+const donutCtx = document.getElementById('donutChart').getContext('2d');
+const donutChart = new Chart(donutCtx, {
+  type: 'doughnut',
+  data: {
+    labels: CONSUMERS,
+    datasets: [{
+      data: [30,25,20,25],
+      backgroundColor: CONSUMER_COLORS,
+      borderColor: '#161f30',
+      borderWidth: 3,
+      hoverOffset: 10,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    cutout: '68%',
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { color: '#64748b', font: { size: 11 }, padding: 16, boxWidth: 10, borderRadius: 5 }
+      },
+      tooltip: {
+        callbacks: { label: c => ` ${c.label}: ${c.parsed}%` }
+      }
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  UPDATE FUNCTIONS
+// ═══════════════════════════════════════════════════════════
+let prevPower = null;
+
+function updateKPIs(d) {
+  document.getElementById('kpiPower').textContent = d.power;
+  document.getElementById('kpiEnergy').textContent = d.energy;
+  document.getElementById('kpiLoad').textContent = d.load + '%';
+  document.getElementById('kpiTemp').textContent = d.temp;
+
+  const delta = prevPower !== null ? (d.power - prevPower).toFixed(1) : 0;
+  const sign = delta >= 0 ? '+' : '';
+  const cls = delta >= 0 ? 'up' : 'down';
+  document.getElementById('kpiPowerDelta').className = `kpi-change ${cls}`;
+  document.getElementById('kpiPowerDelta').textContent = `МВт  ${sign}${delta} від попер. зчитування`;
+  prevPower = d.power;
+}
+
+function updateLineChart(d) {
+  const now = new Date().toLocaleTimeString('uk-UA', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  labels.push(now);
+  powerHistory.push(d.power);
+  reactiveHistory.push(d.reactive);
+  if (labels.length > MAX_POINTS) {
+    labels.shift(); powerHistory.shift(); reactiveHistory.shift();
+  }
+  powerChart.data.labels = [...labels];
+  powerChart.data.datasets[0].data = [...powerHistory];
+  powerChart.data.datasets[1].data = [...reactiveHistory];
+  powerChart.update('none');
+}
+
+function updateDonut() {
+  donutChart.data.datasets[0].data = fakeConsumers();
+  donutChart.update();
+}
+
+function updateTable(units) {
+  const now = new Date().toLocaleTimeString('uk-UA');
+  document.getElementById('tableTime').textContent = now;
+  const statusLabel = { online: 'В роботі', warning: 'Увага', offline: 'Зупинено' };
+  document.getElementById('tableBody').innerHTML = units.map(u => `
+    <tr>
+      <td style="font-weight:600">${u.name}</td>
+      <td style="font-family:'Space Mono',monospace">${u.pw} МВт</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:60px;height:5px;background:#1e2d44;border-radius:3px;overflow:hidden">
+            <div style="width:${u.ld}%;height:100%;background:${u.ld>85?'#ef4444':u.ld>70?'#f59e0b':'#00d4aa'};border-radius:3px"></div>
+          </div>
+          <span style="font-size:0.78rem;color:#64748b">${u.ld}%</span>
+        </div>
+      </td>
+      <td style="font-family:'Space Mono',monospace">${u.tmp}°C</td>
+      <td><span class="status-badge ${u.st}"><span class="status-dot"></span>${statusLabel[u.st]}</span></td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EVENTS LOG
+// ═══════════════════════════════════════════════════════════
+const EVENT_TEMPLATES = [
+  { type:'info',    icon:'ℹ',  titles: ['Зчитування даних', 'Оновлення телеметрії','Синхронізація SCADA'] },
+  { type:'warn',    icon:'⚠',  titles: ['Навантаження > 85%','Підвищена температура','Відхилення частоти'] },
+  { type:'danger',  icon:'⛔', titles: ['Перевищення ліміту','Аварійна зупинка блоку','Збій зв\'язку з SCADA'] },
+  { type:'success', icon:'✓',  titles: ['Блок введено в роботу','Навантаження нормалізоване','REST API: 200 OK'] },
+];
+
+function pushEvent(forceType) {
+  const tpl = forceType
+    ? EVENT_TEMPLATES.find(e=>e.type===forceType)
+    : EVENT_TEMPLATES[Math.floor(Math.random() * EVENT_TEMPLATES.length)];
+  const title = tpl.titles[Math.floor(Math.random() * tpl.titles.length)];
+  const obj = OBJECTS[currentObj];
+  const now = new Date().toLocaleTimeString('uk-UA');
+
+  const item = document.createElement('div');
+  item.className = 'event-item';
+  item.innerHTML = `
+    <div class="event-icon ${tpl.type}">${tpl.icon}</div>
+    <div class="event-content">
+      <div class="event-title">${title}</div>
+      <div class="event-meta">${obj.name}</div>
+    </div>
+    <div class="event-time">${now}</div>
+  `;
+
+  const body = document.getElementById('eventsBody');
+  body.insertBefore(item, body.firstChild);
+  if (body.children.length > 50) body.removeChild(body.lastChild);
+}
+
+function clearEvents() { document.getElementById('eventsBody').innerHTML = ''; }
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════════════════════
+let updateInterval, eventInterval, donutInterval;
+let isPaused = false;
+
+function tick() {
+  if (isPaused) return;
+  const t0 = performance.now();
+  const d = fakeRealtime(currentObj);
+  const units = fakeUnits(currentObj);
+  const latency = Math.round(performance.now() - t0 + 20 + Math.random() * 40);
+
+  updateKPIs(d);
+  updateLineChart(d);
+  updateTable(units);
+
+  requestCount++;
+  document.getElementById('apiRequests').textContent = requestCount;
+  document.getElementById('apiLatency').textContent = latency;
+  document.getElementById('apiUrl').textContent =
+    `https://api.energysight.ua/v1/objects/${currentObj}/realtime`;
+}
+
+function switchObject() {
+  currentObj = parseInt(document.getElementById('objectSelect').value);
+  prevPower = null;
+  labels = []; powerHistory = []; reactiveHistory = [];
+  powerChart.data.labels = [];
+  powerChart.data.datasets[0].data = [];
+  powerChart.data.datasets[1].data = [];
+  powerChart.update('none');
+  pushEvent('info');
+  tick();
+}
+
+function pauseUpdates() {
+  isPaused = !isPaused;
+  const btn = document.querySelector('.btn-ghost');
+  btn.textContent = isPaused ? '▶ Відновити' : '⏸ Пауза';
+  const dot = document.getElementById('wsDot');
+  dot.style.background = isPaused ? '#64748b' : 'var(--online)';
+  document.getElementById('wsStatus').textContent = isPaused ? 'WebSocket: призупинено' : 'WebSocket: підключено';
+}
+
+function exportCSV() {
+  const rows = [['Час','Потужність (МВт)','Реактивна (МВАр)']];
+  for (let i=0; i<labels.length; i++) rows.push([labels[i], powerHistory[i], reactiveHistory[i]]);
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `energy_data_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════════════════════════════
+function updateClock() {
+  document.getElementById('headerTime').textContent =
+    new Date().toLocaleTimeString('uk-UA', { hour12: false });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════
+tick();
+for (let i=0;i<5;i++) setTimeout(()=>pushEvent('info'), i*200);
+
+setInterval(tick, 2000);
+setInterval(updateDonut, 8000);
+setInterval(()=>pushEvent(), 5000 + Math.random()*5000);
+setInterval(updateClock, 1000);
+updateClock();
+</script>
+</body>
+</html>
